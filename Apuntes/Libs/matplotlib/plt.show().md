@@ -1,0 +1,1 @@
+This function is used to display all currently active figures. It should typically be called once at the end of your script or notebook cell to show all the plots you have created. It will pop up a window displaying the plots, and the script or notebook execution will pause until the window is closed.

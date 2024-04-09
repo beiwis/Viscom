@@ -1,0 +1,32 @@
+.callout[data-callout="red"] { 
+--callout-color: 255,0,0; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="orange"] { 
+--callout-color: 255,102,0; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="yellow"] { 
+--callout-color: 255,255,0; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="green"] { 
+--callout-color: 0,255,0; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="blue"] { 
+--callout-color: 0,0,255; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="purple"] { 
+--callout-color: 128,0,128; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="cyan"] { 
+--callout-color: 0,255,255; 
+--callout-icon: lucide-palette;
+}
+.callout[data-callout="magenta"] { 
+--callout-color: 255,0,255; 
+--callout-icon: lucide-palette;
+}

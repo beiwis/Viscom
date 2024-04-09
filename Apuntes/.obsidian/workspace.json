@@ -1,0 +1,165 @@
+{
+  "main": {
+    "id": "4386b64f84d0e918",
+    "type": "split",
+    "children": [
+      {
+        "id": "7ea079a74a8b11cf",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2ec27bccdcd01d50",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "1. Colour.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "3c8d5961e820c14e",
+    "type": "split",
+    "children": [
+      {
+        "id": "c2c343101f82ac24",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "13d996af15c8b5c6",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "77503af806118cc2",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "947eece5a30aeef5",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 200
+  },
+  "right": {
+    "id": "efa2ae3e13dc8488",
+    "type": "split",
+    "children": [
+      {
+        "id": "219eaf552f03800c",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "eed2be8141f9b033",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "1. Colour.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "5fd363cbd4b2d158",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "1. Colour.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "5847d580494de837",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "6ae30d86f2af490a",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "1. Colour.md"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "2ec27bccdcd01d50",
+  "lastOpenFiles": [
+    "attachments/Pasted image 20240125210249.png",
+    "attachments",
+    "1. Colour.md",
+    "Prácticas/p1.md",
+    "Tema 1/attachements/Pasted image 20240125201014.png",
+    "Tema 1/attachements",
+    "Tema 1",
+    "Libs/matplotlib/plt.draw().md",
+    "Libs/matplotlib/plt.show().md",
+    "Libs/Libraries list.md",
+    "Prácticas",
+    "Libs/matplotlib",
+    "Libs"
+  ]
+}

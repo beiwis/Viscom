@@ -1,0 +1,1 @@
+This function, on the other hand, is used to update the current figure or figures. It redraws the current figure(s) if changes have been made since the last draw. This can be useful if you're modifying plot elements programmatically and want to see the changes reflected immediately without calling `plt.show()` again.
