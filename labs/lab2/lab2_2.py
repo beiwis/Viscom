@@ -6,27 +6,41 @@ from lab2_1 import SVD_triangulation
 import matplotlib.pyplot as plt
 import numpy as np
 
-def draw_epipolar_line(F: np.array, point: list[tuple], color: str = 'g'):
+def load_data():
+    # Load the images
+    img1 = cvtColor(imread('data/image1.png'), COLOR_BGR2RGB)
+    img2 = cvtColor(imread('data/image2.png'), COLOR_BGR2RGB)
+    # Load the intrinsic camera parameters
+    K = np.loadtxt('data/K_c.txt')
+    # Load the camera poses (world reference)
+    T1 = np.loadtxt('data/T_w_c1.txt')
+    T2 = np.loadtxt('data/T_w_c2.txt')
+    # Load the matches coordinates in pixel coordinates for camera 1 and 2
+    x1 = np.loadtxt('data/x1Data.txt')
+    x2 = np.loadtxt('data/x2Data.txt')
+    # Load the F matrix (theoretical, only for testing)
+    F = np.loadtxt('data/F_21_test.txt')
+    return img1, img2, K, T1, T2, x1, x2, F
+
+def draw_epipolar_line(F: np.array, point: tuple, img2: np.array, color: str = 'g'):
     """
     Plots the epipolar lines on image 2 given the fundamental matrix between two images and the point(s) on image 1.
 
     Args:
         F (numpy.matrix): The fundamental matrix between two images.
-        x1 (numpy.matrix): The point(s) on image 1.
+        point (numpy.matrix): The point on image 1.
+        img2 (np.array): The second image for the Epipolar lines to be plotted on
+        color (str): The color of the line
     """
-    # Load the image
-    img2 = cvtColor(imread('data/image2.png'), COLOR_BGR2RGB)
-
     # Compute the epipolar lines
-    print(f'Point: \n{point}\nAppended point: \n{np.append(point, 1)}\n\nF: \n{F}')
+    print(f'Point: \n{point}')
     l2 = F @ np.append(point, 1)
 
     # Define the line
     l = [(-l2[2] - l2[0] * 0) / l2[1], (-l2[2] - l2[0] * img2.shape[1] ) / l2[1]]
 
     plt.plot([0, img2.shape[1]], l, c=color)
-    plt.title('Image 2')
-    plt.show()
+    plt.title('Epipolar lines on Image 2')
     plt.draw()
 
 def get_essential_matrix(T0: np.array, T1: np.array) -> np.array:
@@ -78,16 +92,45 @@ def get_fundamental_matrix(E: np.array, K1: np.array, K2: np.array) -> np.array:
     F = F / F[-1, -1]
     return F
 
-def get_fundamental_matrix(x1:np.array, x2:np.array, normalize:bool = False):
+def get_fundamental_matrix(x1: np.array, x2: np.array) -> np.array:
     """
-    Compute the fundamental matrix using the eight-point algorithm
+    Compute the fundamental matrix using the eight-point algorithm.
+
+    Args:
+    x1, x2 (np.array): The matches from both cameras (c1, c2) in pixel coordinates.
+
+    Returns:
+    np.array: The fundamental matrix.
     """
-    # Normalize the points
-    
+    # Homogenize the points
+    x1 = np.hstack((x1, np.ones((x1.shape[0], 1))))
+    x2 = np.hstack((x2, np.ones((x2.shape[0], 1))))
+
     # Construct the A matrix
+    A = []
+    for i in range(x1.shape[0]):
+        X1 = x1[i]
+        X2 = x2[i]
+        A.append([
+            X2[0] * X1[0], X2[0] * X1[1], X2[0],
+            X2[1] * X1[0], X2[1] * X1[1], X2[1],
+            X1[0], X1[1], 1
+        ])
+    A = np.array(A)
+
     # Solve for F (SVD)
-    # De-normalize the matrix    
-    pass
+    _, _, Vt = np.linalg.svd(A)
+    F = Vt[-1].reshape(3, 3)
+
+    # Enforce rank-2 constraint
+    U, S, Vt = np.linalg.svd(F)
+    S[-1] = 0
+    F = U @ np.diag(S) @ Vt
+
+    # Normalize the fundamental matrix
+    F = F / F[-1, -1]
+    print(f"DEBUG: F = {F}")
+    return F
 
 def get_camera_solutions(R1: np.array, R2: np.array, T1: np.array, T2: np.array, K1: np.array, K2: np.array, x1: np.array, x2: np.array):
     """
@@ -142,7 +185,7 @@ def get_camera_motion(E: np.array):
     T2 = -U[:, 2].reshape(-1, 1)
     return R1, R2, T1, T2
 
-def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array):
+def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array, n: int):
     """
     Visualize the epipolar lines on the second image given the fundamental matrix between two images, selecting five points in the first image.
     This function corresponds to the first part of the second exercise of the second lab.
@@ -157,6 +200,8 @@ def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array):
         The second image.
     F : numpy.ndarray
         The fundamental matrix between the two images.
+    n : int
+        The number of points/epipolar lines
     """
     # Display the images in a single figure with two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
@@ -168,14 +213,10 @@ def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array):
 
     # Colors for the epipolar lines
     colors = ['r', 'y', 'g', 'c', 'm']
-
-
-    points = []
-    for i in range(1):
+    for i in range(n):
         # Capture the point
         point = plt.ginput(1)  # Capture a single point
-        points.append(point[0])
-        ax1.plot(point[0][0], point[0][1], 'x', c=colors[i])  # Plot the selected point
+        ax1.plot(point[0][0], point[0][1], 'x', c=colors[i%5])  # Plot the selected point
 
         # Display the second image
         ax2.set_title('Epipolar line(s)')
@@ -183,10 +224,11 @@ def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array):
         ax2.axis('equal')
 
         # Draw the epipolar lines
-        for i, point in enumerate(points):
-            draw_epipolar_line(F, point, colors[i])
+        draw_epipolar_line(F, point, img2, colors[i%5])
 
-        plt.draw()
+        print(f"Degub: pedopedo n:{i}")
+
+    plt.show()
 
 def Camera_poses_to_fundamental_matrix(T1, T2, E, K, img1, img2):
     E = get_essential_matrix(T1, T2)
@@ -198,23 +240,11 @@ def Camera_poses_to_fundamental_matrix(T1, T2, E, K, img1, img2):
     print(f'Testing fundamental matrix: \n{F_test}')
     Epipolar_lines_visualization(img1, img2, F)
 
-                                       
+                           
 if __name__ == '__main__':
     # 2.0 LOAD THE DATA
     #######################################
-    # Load the images
-    img1 = cvtColor(imread('data/image1.png'), COLOR_BGR2RGB)
-    img2 = cvtColor(imread('data/image2.png'), COLOR_BGR2RGB)
-    # Load the intrinsic camera parameters
-    K = np.loadtxt('data/K_c.txt')
-    # Load the camera poses (world reference)
-    T1 = np.loadtxt('data/T_w_c1.txt')
-    T2 = np.loadtxt('data/T_w_c2.txt')
-    # Load the matches coordinates in pixel coordinates for camera 1 and 2
-    x1 = np.loadtxt('data/x1Data.txt')
-    x2 = np.loadtxt('data/x2Data.txt')
-    # Load the F matrix (theoretical, only for testing)
-    F = np.loadtxt('data/F_21_test.txt')
+    img1, img2, K, T1, T2, x1, x2, F = load_data()
 
     # 2.1 EPIPOLAR LINES VISUALIZATION
     #######################################
@@ -224,38 +254,7 @@ if __name__ == '__main__':
     #######################################
     # Camera_poses_to_fundamental_matrix(T1, T2, E, K, img1, img2)
     
-
-    # # Load the matches
-    # x1 = np.loadtxt('x1Data.txt')
-    # x2 = np.loadtxt('x2Data.txt')
-
-    # # Get the fundamental matrix
+    # 2.3 FUNDAMENTAL MATRIX LINEAR ESTIMATION WITH EIGHT POINT SOLUTION
+    #########################################################################
     # F = get_fundamental_matrix(x1, x2)
-    # # Normalize the fundamental matrix
-    # F = F / F[-1, -1]
-    # print(f"Fundamental matrix: {F}")
-    # # Get the testing fundamental matrix
-    # F_test = np.loadtxt('F_21_test.txt')
-    # print(f"Fundamental matrix test: {F_test}")
-##############################################################################
-#                         Plot the point on the images                       #
-##############################################################################
-# # Load the images
-# img1 = cvtColor(imread('image1.png'), COLOR_BGR2RGB)
-# img2 = cvtColor(imread('image2.png'), COLOR_BGR2RGB)
-# # Load the points
-# x1 = np.loadtxt('x1Data.txt')
-# x2 = np.loadtxt('x2Data.txt')
-# # Plot the images and the points
-# plt.figure(1)
-# plt.subplot(121)
-# plt.imshow(img1, cmap='gray', vmin=0, vmax=255)
-# plt.scatter(x1[0, :], x1[1, :], marker='x', c='r')
-# plt.title('Image 1')
-# plt.subplot(122)
-# plt.imshow(img2)
-# plt.scatter(x2[0, :], x2[1, :], marker='x', c='r')
-# plt.title('Image 2')
-# plt.draw()  # We update the figure display
-# print('Click in the image to continue...')
-# plt.waitforbuttonpress()
+    Epipolar_lines_visualization(img1, img2, F, 5)

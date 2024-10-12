@@ -1,1 +1,2 @@
-CVenv/
+labs/CVenv/
+**/__pycache__/
