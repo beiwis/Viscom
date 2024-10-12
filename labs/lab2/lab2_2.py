@@ -79,6 +79,9 @@ def get_fundamental_matrix(E: np.array, K1: np.array, K2: np.array) -> np.array:
     return F
 
 def get_fundamental_matrix(x1:np.array, x2:np.array, normalize:bool = False):
+    """
+    Compute the fundamental matrix using the eight-point algorithm
+    """
     # Normalize the points
     
     # Construct the A matrix
