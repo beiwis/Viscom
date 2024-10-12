@@ -43,166 +43,93 @@ def draw_epipolar_line(F: np.array, point: tuple, img2: np.array, color: str = '
     plt.title('Epipolar lines on Image 2')
     plt.draw()
 
-def get_essential_matrix(T0: np.array, T1: np.array) -> np.array:
+def get_fundamental_matrix(*args) -> np.array:
     """
-    Compute the essential matrix from two World to Camera poses.
+    Compute the fundamental matrix.
+
+    This function can compute the fundamental matrix in two ways:
+    1. From the intrinsic camera parameters and the essential matrix.
+    2. Using the eight-point algorithm from matched pixel coordinates.
 
     Args:
-    T0, T1 (np.array): The camera poses from both cameras (c1, c2) in world reference.
+        -  Case 1: 
+            T1 (np.array): The camera pose from camera 1 (c1) in world reference.
+            T2 (np.array): The camera pose from camera 2 (c2) in world reference.
+            K1 (np.array): The intrinsic camera parameters matrix from camera 1 (c1).
+            K2 (np.array): The intrinsic camera parameters matrix from camera 2 (c2).
+        
+        -  Case 2:
+            x1 (np.array): The points from the first camera (c1) in pixel coordinates.
+            x2 (np.array): The points from the second camera (c2) in pixel coordinates.
 
     Returns:
-    The essential matrix.
+        np.array: The 3x3 fundamental matrix.
     """
-    # Extract the rotation and translation components
-    R1, t1 = T0[:3, :3], T0[:3, 3]
-    R2, t2 = T1[:3, :3], T1[:3, 3]
+    # Case 1: Get the fundamental matrix from the intrinsic camera parameters and the essential matrix.
+    if len(args) == 4 and all(isinstance(arg, np.ndarray) for arg in args):
+        # Case 1: Using camera parameters and poses
+        T1, T2, K1, K2 = args
+        
+        # Compute the relative rotation and translation (T_2_1 = T2^-1 @ T1)
+        T_2_1 = np.linalg.inv(T2) @ T1
 
-    # Compute the relative rotation and translation (slide 2.16: R = R_c1c0; t = t_c1c0)
-    R = R2 @ R1.T
-    t = t2 - R @ t1
+        # Extract the rotation and translation components
+        R, t = T_2_1[:3, :3], T_2_1[:3, 3]
 
-    # Compute the skew-symmetric matrix of t (slide 2.16)
-    t = np.array([
-        [0, -t[2], t[1]],
-        [t[2], 0, -t[0]],
-        [-t[1], t[0], 0]
-    ])
-
-    # Compute the essential matrix (slide 2.16: 𝑬 = [𝒕] × 𝑹)
-    E = t @ R
-
-    return E
-
-def get_fundamental_matrix(E: np.array, K1: np.array, K2: np.array) -> np.array:
-    """
-    Compute the fundamental matrix from the intrinsic camera parameters and the essential matrix.
-
-    Args:
-    -----------
-    E (np.array): The essential matrix.
-    K1, K2 (np.array): The intrinsic camera parameters matrix from both cameras (c1, c2).
-
-    Returns:
-    --------
-    np.array: The normalized fundamental matrix.
-    """
-    # Compute the fundamental matrix (slide 2.20: F = K)
-    F = np.linalg.inv(K2.T) @ E @ np.linalg.inv(K1)
-    # Normalize the fundamental matrix
-    F = F / F[-1, -1]
-    return F
-
-def get_fundamental_matrix(x1: np.array, x2: np.array) -> np.array:
-    """
-    Compute the fundamental matrix using the eight-point algorithm.
-
-    Args:
-    x1, x2 (np.array): The matches from both cameras (c1, c2) in pixel coordinates.
-
-    Returns:
-    np.array: The fundamental matrix.
-    """
-    # Homogenize the points
-    x1 = np.hstack((x1, np.ones((x1.shape[0], 1))))
-    x2 = np.hstack((x2, np.ones((x2.shape[0], 1))))
-
-    # Construct the A matrix
-    A = []
-    for i in range(x1.shape[0]):
-        X1 = x1[i]
-        X2 = x2[i]
-        A.append([
-            X2[0] * X1[0], X2[0] * X1[1], X2[0],
-            X2[1] * X1[0], X2[1] * X1[1], X2[1],
-            X1[0], X1[1], 1
+        # Compute the skew-symmetric matrix of t
+        t = np.array([
+            [0, -t[2], t[1]],
+            [t[2], 0, -t[0]],
+            [-t[1], t[0], 0]
         ])
-    A = np.array(A)
 
-    # Solve for F (SVD)
-    _, _, Vt = np.linalg.svd(A)
-    F = Vt[-1].reshape(3, 3)
+        # Compute the essential matrix
+        E = t @ R
 
-    # Enforce rank-2 constraint
-    U, S, Vt = np.linalg.svd(F)
-    S[-1] = 0
-    F = U @ np.diag(S) @ Vt
+        # Compute the fundamental matrix
+        F = np.linalg.inv(K2.T) @ E @ np.linalg.inv(K1)
 
-    # Normalize the fundamental matrix
-    F = F / F[-1, -1]
-    print(f"DEBUG: F = {F}")
-    return F
+        return F
+    # Case 2: Get the fundamental matrix using the eight-point algorithm from matched pixel coordinates.
+    elif len(args) == 2 and all(isinstance(arg, np.ndarray) for arg in args):
+        # Case 2: Using the eight-point algorithm
+        x1, x2 = args
 
-def get_camera_solutions(R1: np.array, R2: np.array, T1: np.array, T2: np.array, K1: np.array, K2: np.array, x1: np.array, x2: np.array):
-    """
-    Get the camera matrices and then triangulate the points.
+        # Construct the A matrix
+        # We get 8 out of all the possible matches:
+        indices = np.random.choice(x1.shape[1], 8, replace=False)
+        A = []
+        for i in indices:
+            A.append([
+                x2[0, i] * x1[0, i], x2[0, i] * x1[1, i], x2[0, i],
+                x2[1, i] * x1[0, i], x2[1, i] * x1[1, i], x2[1, i],
+                x1[0, i], x1[1, i], 1
+            ])
+        A = np.array(A)
 
-    Args:
-    R1, R2 (np.array): The rotation matrices.
-    T1, T2 (np.array): The translation vectors.
-    K1, K2 (np.array): The intrinsic camera parameters matrix from both cameras (c1, c2)
-    x1, x2 (np.array): The matches from both cameras (c1, c2) in pixel coordinates.
+        # Solve for F (SVD)
+        _, _, Vh = np.linalg.svd(A)
+        F = Vh[-1, :].reshape(3, 3)
 
-    Returns:
-    The four possible camera matrices
-    """
-    # Define the identity matrix and zero vector
-    I = np.eye(3)
-    zero = np.zeros((3, 1))
+        return F
 
-    # Define the four possible camera matrices
-    P1 = K1 @ np.hstack((I, zero))
-    P2_a = K2 @ np.hstack((R1, T1))
-    P2_b = K2 @ np.hstack((R1, T2))
-    P2_c = K2 @ np.hstack((R2, T1))
-    P2_d = K2 @ np.hstack((R2, T2))
+    else:
+        raise ValueError("Invalid arguments. Provide either (T1, T2, K1, K2) or (x1, x2).")
 
-    # Triangulate the points
-    X_a = SVD_triangulation(x1, x2, P1, P2_a)
-    X_b = SVD_triangulation(x1, x2, P1, P2_b)
-    X_c = SVD_triangulation(x1, x2, P1, P2_c)
-    X_d = SVD_triangulation(x1, x2, P1, P2_d)
-
-def get_camera_motion(E: np.array):
-    """
-    Compute the camera motion from the essential matrix.
-
-    Args:
-    E (np.array): The essential matrix.
-
-    Returns:
-    The rotation matrix R and the translation vector T.
-    3D points in the world coordinate system.
-    """
-    F = get_fundamental_matrix(x1, x2)
-    # Compute the essential matrix
-    E = get_essential_matrix
-    # Compute the possible camera motions
-    U, _, Vt = np.linalg.svd(E)
-    W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-    R1 = np.dot(U, np.dot(W, Vt))
-    R2 = np.dot(U, np.dot(W.T, Vt))
-    T1 = U[:, 2].reshape(-1, 1)
-    T2 = -U[:, 2].reshape(-1, 1)
-    return R1, R2, T1, T2
-
-def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array, n: int):
+def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array, n: int=1):
     """
     Visualize the epipolar lines on the second image given the fundamental matrix between two images, selecting five points in the first image.
-    This function corresponds to the first part of the second exercise of the second lab.
-    Laboratory Session 2: Homography, Fundamental Matrix and Two View SfM
-        2. Fundamental matrix and Structure from Motion
+    This function corresponds to the first part of the second exercise of the second lab.\n
+    Laboratory Session 2: Homography, Fundamental Matrix and Two View SfM\n
+        2. Fundamental matrix and Structure from Motion\n
             2.1 Epipolar lines visualization
-    Parameters:
-    ----------
-    img1 : numpy.ndarray
-        The first image.
-    img2 : numpy.ndarray
-        The second image.
-    F : numpy.ndarray
-        The fundamental matrix between the two images.
-    n : int
-        The number of points/epipolar lines
-    """
+
+    Args:
+        img1 (numpy.ndarray): The first image.
+        img2 (numpy.ndarray): The second image.
+        F (numpy.ndarray): The fundamental matrix between the two images.
+        n (int): The number of points/epipolar lines.
+    """    
     # Display the images in a single figure with two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
@@ -230,17 +157,20 @@ def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array, n:
 
     plt.show()
 
-def Camera_poses_to_fundamental_matrix(T1, T2, E, K, img1, img2):
-    E = get_essential_matrix(T1, T2)
-    F = get_fundamental_matrix(E, K, K)
-    np.set_printoptions(precision=7, suppress=True)
-    print(f'Fundamental matrix: \n{F}')
+def Camera_poses_to_fundamental_matrix(T1, T2, K, img1, img2):
     # Load the testing fundamental matrix
     F_test = np.loadtxt('data/F_21_test.txt')
     print(f'Testing fundamental matrix: \n{F_test}')
+    Epipolar_lines_visualization(img1, img2, F_test)
+    # Calculate the F matrix using the different camera poses
+    F = get_fundamental_matrix(T1, T2, K, K)
+    print(f'Fundamental matrix: \n{F}')
     Epipolar_lines_visualization(img1, img2, F)
 
-                           
+def Fundamental_matrix_8_point_solution(x1, x2, img1, img2, F):
+    F = get_fundamental_matrix(x1, x2)
+    Epipolar_lines_visualization(img1, img2, F, 5)
+
 if __name__ == '__main__':
     # 2.0 LOAD THE DATA
     #######################################
@@ -252,9 +182,106 @@ if __name__ == '__main__':
 
     # 2.2 FUNDAMENTAL MATRIX DEFINITION
     #######################################
-    # Camera_poses_to_fundamental_matrix(T1, T2, E, K, img1, img2)
+    # Camera_poses_to_fundamental_matrix(T1, T2, K, img1, img2)
     
     # 2.3 FUNDAMENTAL MATRIX LINEAR ESTIMATION WITH EIGHT POINT SOLUTION
-    #########################################################################
-    # F = get_fundamental_matrix(x1, x2)
-    Epipolar_lines_visualization(img1, img2, F, 5)
+    ######################################################################### FIXME: i get the epipole in the middle of the screen?
+    # Fundamental_matrix_8_point_solution(x1, x2, img1, img2, F)
+
+    # TODO: 2.4 POSE ESTIMATION FROM TWO VIEWS 
+    ########################################
+    def estimate_pose_from_essential_matrix(E, K):
+        """
+        Estimate the four possible camera poses from the essential matrix.
+
+        Args:
+            E (np.array): The essential matrix.
+            K (np.array): The intrinsic camera parameters matrix.
+
+        Returns:
+            list: A list of four possible camera poses (3x4 matrices).
+        """
+        # Perform SVD on the essential matrix
+        U, _, Vt = np.linalg.svd(E)
+
+        # Ensure a proper rotation matrix
+        if np.linalg.det(U @ Vt) < 0:
+            Vt = -Vt
+
+        # Define the W matrix
+        W = np.array([[0, -1, 0],
+                      [1, 0, 0],
+                      [0, 0, 1]])
+
+        # Compute the four possible camera poses
+        R1 = U @ W @ Vt
+        R2 = U @ W.T @ Vt
+        t = U[:, 2]
+
+        poses = [
+            np.hstack((R1, t.reshape(-1, 1))),
+            np.hstack((R1, -t.reshape(-1, 1))),
+            np.hstack((R2, t.reshape(-1, 1))),
+            np.hstack((R2, -t.reshape(-1, 1)))
+        ]
+
+        return poses
+
+    def triangulate_points(P1, P2, x1, x2):
+        """
+        Triangulate 3D points from two views.
+
+        Args:
+            P1 (np.array): The projection matrix for the first camera.
+            P2 (np.array): The projection matrix for the second camera.
+            x1 (np.array): The points from the first camera (c1) in pixel coordinates.
+            x2 (np.array): The points from the second camera (c2) in pixel coordinates.
+
+        Returns:
+            np.array: The triangulated 3D points.
+        """
+        points_3d = []
+        for i in range(x1.shape[1]):
+            A = np.array([
+                x1[0, i] * P1[2, :] - P1[0, :],
+                x1[1, i] * P1[2, :] - P1[1, :],
+                x2[0, i] * P2[2, :] - P2[0, :],
+                x2[1, i] * P2[2, :] - P2[1, :]
+            ])
+            _, _, Vt = np.linalg.svd(A)
+            X = Vt[-1]
+            points_3d.append(X / X[3])
+
+        return np.array(points_3d).T
+
+    def find_correct_pose(poses, K, x1, x2):
+        """
+        Find the correct camera pose from the four possible poses.
+
+        Args:
+            poses (list): A list of four possible camera poses (3x4 matrices).
+            K (np.array): The intrinsic camera parameters matrix.
+            x1 (np.array): The points from the first camera (c1) in pixel coordinates.
+            x2 (np.array): The points from the second camera (c2) in pixel coordinates.
+
+        Returns:
+            np.array: The correct camera pose (3x4 matrix).
+        """
+        P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
+        for pose in poses:
+            P2 = K @ pose
+            points_3d = triangulate_points(P1, P2, x1, x2)
+            if np.all(points_3d[2, :] > 0):  # Check if all points are in front of both cameras
+                return pose
+        raise ValueError("No valid pose found.")
+
+    # Compute the essential matrix from the fundamental matrix
+    E = K.T @ F @ K
+
+    # Estimate the four possible camera poses
+    poses = estimate_pose_from_essential_matrix(E, K)
+
+    # Find the correct camera pose
+    correct_pose = find_correct_pose(poses, K, x1, x2)
+    print(f'Correct camera pose: \n{correct_pose}')
+
