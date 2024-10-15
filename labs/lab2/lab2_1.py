@@ -50,7 +50,7 @@ def SVD_triangulation(x1: np.matrix, x2: np.matrix, P1: np.matrix, P2: np.matrix
         # We get the last column (row bc numpy) of V
         X = V[-1, :]
         # We normalize the 3D point
-        X = X / X[0,-1]
+        X = X / X[-1]
         # We add the 3D point to the 3D points matrix
         X_3d = np.hstack((X_3d, X.reshape(-1, 1)))
     return X_3d

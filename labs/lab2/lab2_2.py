@@ -20,7 +20,10 @@ def load_data():
     x2 = np.loadtxt('data/x2Data.txt')
     # Load the F matrix (theoretical, only for testing)
     F = np.loadtxt('data/F_21_test.txt')
-    return img1, img2, K, T1, T2, x1, x2, F
+    # Load the ground truth 3D points
+    X_w = np.loadtxt('data/X_w.txt')
+
+    return img1, img2, K, T1, T2, x1, x2, F, X_w
 
 def draw_epipolar_line(F: np.array, point: tuple, img2: np.array, color: str = 'g'):
     """
@@ -33,7 +36,6 @@ def draw_epipolar_line(F: np.array, point: tuple, img2: np.array, color: str = '
         color (str): The color of the line
     """
     # Compute the epipolar lines
-    print(f'Point: \n{point}')
     l2 = F @ np.append(point, 1)
 
     # Define the line
@@ -97,9 +99,10 @@ def get_fundamental_matrix(*args) -> np.array:
 
         # Construct the A matrix
         # We get 8 out of all the possible matches:
-        indices = np.random.choice(x1.shape[1], 8, replace=False)
+        # indices = np.random.choice(x1.shape[1], 8, replace=False)
+        # this isn't necessary, we need a minimum of 8 points, but we can use more, so:
         A = []
-        for i in indices:
+        for i in range(x1.shape[1]):
             A.append([
                 x2[0, i] * x1[0, i], x2[0, i] * x1[1, i], x2[0, i],
                 x2[1, i] * x1[0, i], x2[1, i] * x1[1, i], x2[1, i],
@@ -110,6 +113,11 @@ def get_fundamental_matrix(*args) -> np.array:
         # Solve for F (SVD)
         _, _, Vh = np.linalg.svd(A)
         F = Vh[-1, :].reshape(3, 3)
+
+        # Enforce rank 2 constraint
+        U, S, Vh = np.linalg.svd(F)
+        S[-1] = 0
+        F = U @ np.diag(S) @ Vh
 
         return F
 
@@ -152,29 +160,91 @@ def Epipolar_lines_visualization(img1: np.array, img2: np.array, F: np.array, n:
 
         # Draw the epipolar lines
         draw_epipolar_line(F, point, img2, colors[i%5])
-
-        print(f"Degub: pedopedo n:{i}")
-
     plt.show()
 
 def Camera_poses_to_fundamental_matrix(T1, T2, K, img1, img2):
     # Load the testing fundamental matrix
     F_test = np.loadtxt('data/F_21_test.txt')
-    print(f'Testing fundamental matrix: \n{F_test}')
     Epipolar_lines_visualization(img1, img2, F_test)
     # Calculate the F matrix using the different camera poses
     F = get_fundamental_matrix(T1, T2, K, K)
-    print(f'Fundamental matrix: \n{F}')
     Epipolar_lines_visualization(img1, img2, F)
 
-def Fundamental_matrix_8_point_solution(x1, x2, img1, img2, F):
+def Fundamental_matrix_8_point_solution(x1, x2, img1, img2):
+    """
+    Since we're choosing 8 random points, the results will vary, which means it's not such a good method and we should use more points.
+    We can see that the epipolar lines are not perfect, and the epipole changes its position each execution.
+    We could use RANSAC to improve the results.
+
+    Args:
+        x1 (np.array): The points from the first camera (c1) in pixel coordinates.
+        x2 (np.array): The points from the second camera (c2) in pixel coordinates. 
+    """
     F = get_fundamental_matrix(x1, x2)
     Epipolar_lines_visualization(img1, img2, F, 5)
+
+def Pose_estimation_from_2_views(F, K, x1, x2, T2_theo):
+    """
+    Compute the fundamental matrix and the camera poses from two views.
+    """
+    # Get the fundamental matrix using the eight-point algorithm
+    F = get_fundamental_matrix(x1, x2)
+    
+    # Compute the essential matrix from the fundamental matrix
+    E = K.T @ F @ K
+
+    # Perform SVD on the essential matrix
+    U, _, Vh = np.linalg.svd(E)
+
+    # Ensure a proper rotation matrix
+    if np.linalg.det(U @ Vh) < 0:
+        Vh = -Vh
+
+    # Define the W matrix
+    W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+
+    # Compute the four possible camera poses
+    R1 = U @ W @ Vh
+    R2 = U @ W.T @ Vh
+    t = U[:, 2]
+
+    poses = [
+        np.hstack((R1, t.reshape(-1, 1))),
+        np.hstack((R1, -t.reshape(-1, 1))),
+        np.hstack((R2, t.reshape(-1, 1))),
+        np.hstack((R2, -t.reshape(-1, 1)))
+    ]
+
+    # Find the correct camera pose
+    P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
+    for pose in poses:
+        P2 = K @ pose
+        points_3d = SVD_triangulation(x1, x2, P1, P2)
+        if np.all(points_3d[2, :] > 0):
+            correct_pose = pose
+            break
+
+    # Compute the absolute pose of camera 2 with respect to the world
+    R21 = correct_pose[:, :3]
+    t21 = correct_pose[:, 3]
+
+    # Construct the transformation matrix for the relative pose
+    T21_est = np.eye(4)
+    T21_est[:3, :3] = R21
+    T21_est[:3, 3] = t21
+
+    # Compute the absolute pose of camera 2 with respect to the world
+    T1_est = T2_theo @ T21_est
+
+    # Compute the absolute pose of 3d points with respect to the camera 1
+    points_3d = T1_est @ points_3d
+
+    return T1_est, points_3d
 
 if __name__ == '__main__':
     # 2.0 LOAD THE DATA
     #######################################
-    img1, img2, K, T1, T2, x1, x2, F = load_data()
+    img1, img2, K, T1_theo, T2_theo, x1, x2, F, X_w= load_data()
 
     # 2.1 EPIPOLAR LINES VISUALIZATION
     #######################################
@@ -185,103 +255,52 @@ if __name__ == '__main__':
     # Camera_poses_to_fundamental_matrix(T1, T2, K, img1, img2)
     
     # 2.3 FUNDAMENTAL MATRIX LINEAR ESTIMATION WITH EIGHT POINT SOLUTION
-    ######################################################################### FIXME: i get the epipole in the middle of the screen?
-    # Fundamental_matrix_8_point_solution(x1, x2, img1, img2, F)
+    ######################################################################### 
+    # Fundamental_matrix_8_point_solution(x1, x2, img1, img2)
+    
 
-    # TODO: 2.4 POSE ESTIMATION FROM TWO VIEWS 
+    # 2.4 POSE ESTIMATION FROM TWO VIEWS 
     ########################################
-    def estimate_pose_from_essential_matrix(E, K):
-        """
-        Estimate the four possible camera poses from the essential matrix.
+    T1_est, points_3d = Pose_estimation_from_2_views(F, K, x1, x2, T2_theo)
 
-        Args:
-            E (np.array): The essential matrix.
-            K (np.array): The intrinsic camera parameters matrix.
+    # 2.5 RESULTS VISUALIZATION
+    #######################################
+    fig3D = plt.figure(3)
 
-        Returns:
-            list: A list of four possible camera poses (3x4 matrices).
-        """
-        # Perform SVD on the essential matrix
-        U, _, Vt = np.linalg.svd(E)
+    ax = plt.axes(projection='3d', adjustable='box')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
-        # Ensure a proper rotation matrix
-        if np.linalg.det(U @ Vt) < 0:
-            Vt = -Vt
+    # Draw the camera poses
+    drawRefSystem(ax, T1_theo, '-', 'c1_theo')
+    drawRefSystem(ax, T2_theo, '-', 'c2_theo')
+    drawRefSystem(ax, T1_est, '-', 'c1_est')
+    drawRefSystem(ax, np.eye(4), '-', 'W')
 
-        # Define the W matrix
-        W = np.array([[0, -1, 0],
-                      [1, 0, 0],
-                      [0, 0, 1]])
+    # We plot the X_w_SVD
+    ax.scatter(X_w[0, :], X_w[1, :], X_w[2, :], marker='.', label='Ground Truth')
+    ax.scatter(points_3d[0, :], points_3d[1, :], points_3d[2, :], marker='.', label='Estimated')
+    # ax.scatter(points_3d[2, :], -points_3d[0, :], -points_3d[1, :], marker='.')
+    #plotNumbered3DPoints(ax, X_w, 'r', (0.1, 0.1, 0.1)) 
 
-        # Compute the four possible camera poses
-        R1 = U @ W @ Vt
-        R2 = U @ W.T @ Vt
-        t = U[:, 2]
-
-        poses = [
-            np.hstack((R1, t.reshape(-1, 1))),
-            np.hstack((R1, -t.reshape(-1, 1))),
-            np.hstack((R2, t.reshape(-1, 1))),
-            np.hstack((R2, -t.reshape(-1, 1)))
-        ]
-
-        return poses
-
-    def triangulate_points(P1, P2, x1, x2):
-        """
-        Triangulate 3D points from two views.
-
-        Args:
-            P1 (np.array): The projection matrix for the first camera.
-            P2 (np.array): The projection matrix for the second camera.
-            x1 (np.array): The points from the first camera (c1) in pixel coordinates.
-            x2 (np.array): The points from the second camera (c2) in pixel coordinates.
-
-        Returns:
-            np.array: The triangulated 3D points.
-        """
-        points_3d = []
-        for i in range(x1.shape[1]):
-            A = np.array([
-                x1[0, i] * P1[2, :] - P1[0, :],
-                x1[1, i] * P1[2, :] - P1[1, :],
-                x2[0, i] * P2[2, :] - P2[0, :],
-                x2[1, i] * P2[2, :] - P2[1, :]
-            ])
-            _, _, Vt = np.linalg.svd(A)
-            X = Vt[-1]
-            points_3d.append(X / X[3])
-
-        return np.array(points_3d).T
-
-    def find_correct_pose(poses, K, x1, x2):
-        """
-        Find the correct camera pose from the four possible poses.
-
-        Args:
-            poses (list): A list of four possible camera poses (3x4 matrices).
-            K (np.array): The intrinsic camera parameters matrix.
-            x1 (np.array): The points from the first camera (c1) in pixel coordinates.
-            x2 (np.array): The points from the second camera (c2) in pixel coordinates.
-
-        Returns:
-            np.array: The correct camera pose (3x4 matrix).
-        """
-        P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
-        for pose in poses:
-            P2 = K @ pose
-            points_3d = triangulate_points(P1, P2, x1, x2)
-            if np.all(points_3d[2, :] > 0):  # Check if all points are in front of both cameras
-                return pose
-        raise ValueError("No valid pose found.")
-
-    # Compute the essential matrix from the fundamental matrix
-    E = K.T @ F @ K
-
-    # Estimate the four possible camera poses
-    poses = estimate_pose_from_essential_matrix(E, K)
-
-    # Find the correct camera pose
-    correct_pose = find_correct_pose(poses, K, x1, x2)
-    print(f'Correct camera pose: \n{correct_pose}')
-
+    #Matplotlib does not correctly manage the axis('equal')
+    xFakeBoundingBox = np.linspace(0, 4, 2)
+    yFakeBoundingBox = np.linspace(0, 4, 2)
+    zFakeBoundingBox = np.linspace(0, 4, 2)
+    plt.plot(xFakeBoundingBox, yFakeBoundingBox, zFakeBoundingBox, 'w.')
+    plt.title('Camera poses and 3D points')
+    plt.legend()
+    plt.show()
+    
+    # TODO: Propose and use a metric for evaluating the accuracy of your results
+    # Compute the reprojection error
+    x1_reprojected = T1_est @ points_3d
+    x1_reprojected = x1_reprojected[:2, :] / x1_reprojected[2, :]
+    x2_reprojected = T2_theo @ points_3d
+    x2_reprojected = x2_reprojected[:2, :] / x2_reprojected[2, :]
+    error1 = np.linalg.norm(x1 - x1_reprojected)
+    error2 = np.linalg.norm(x2 - x2_reprojected)
+    print(f'Reprojection error for camera 1: {error1}')
+    print(f'Reprojection error for camera 2: {error2}')
+    

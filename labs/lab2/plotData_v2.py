@@ -73,7 +73,7 @@ def plotLabeledImagePoints(x, labels, strColor,offset):
          """
     for k in range(x.shape[1]):
         plt.text(x[0, k]+offset[0], x[1, k]+offset[1], labels[k], color=strColor)
-def plotNumberedImagePoints(x,strColor,offset):
+def plotNumberedImagePoints(x,strColor,offset = (10,0)):
     """
         Plot indexes of points on a 2D image.
          -input:
